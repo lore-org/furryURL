@@ -1,4 +1,5 @@
-target_sources("${SANITISED_PROJECT_NAME}" PUBLIC
+target_sources("${PROJECT_NAME}" PUBLIC
     request.cpp
     response.cpp
+    headers.cpp
 )

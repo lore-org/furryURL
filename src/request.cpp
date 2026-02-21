@@ -2,7 +2,10 @@
 
 #include <stdexcept>
 
-#include <furryurl/methods.h>
+#include <curl/curl.h>
+#include <curl/easy.h>
+
+#include <furryurl/method.h>
 
 using namespace furryurl;
 
@@ -18,51 +21,66 @@ Request::Request(std::string url) {
         throw std::runtime_error("furryURL: could not initialise local cURL");
     }
 
-    this->setUrl(url);
-    this->setMethod(HTTPMethod::Get);
+    m_url = url;
+    m_method = HTTPMethod::Get;
 
     curl_easy_setopt(m_curlInst, CURLOPT_CA_CACHE_TIMEOUT, 604800);
 }
 
-void Request::setUrl(std::string url) {
-    m_url = url;
-    curl_easy_setopt(m_curlInst, CURLOPT_URL, m_url.c_str());
-}
-
-void Request::setMethod(HTTPMethod method) {
-    m_method = method;
-
-    // Reset all options
-    curl_easy_setopt(m_curlInst, CURLOPT_HTTPGET, 0);
-    curl_easy_setopt(m_curlInst, CURLOPT_NOBODY, 0);
-    curl_easy_setopt(m_curlInst, CURLOPT_POST, 0);
-    curl_easy_setopt(m_curlInst, CURLOPT_POSTFIELDS, NULL);
-    curl_easy_setopt(m_curlInst, CURLOPT_UPLOAD, 0);
-    curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, NULL);
-
+void Request::prepareRequest() {
+    // Set Options for the given HTTP Method
     switch(m_method) {
-        case HTTPMethod::Get:
-            curl_easy_setopt(m_curlInst, CURLOPT_HTTPGET, 1);
-            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "GET");
-        case HTTPMethod::Head:
-            curl_easy_setopt(m_curlInst, CURLOPT_NOBODY, 1);
-            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "HEAD");
-        case HTTPMethod::Post:
-            curl_easy_setopt(m_curlInst, CURLOPT_POST, 1);
-            curl_easy_setopt(m_curlInst, CURLOPT_POSTFIELDS, m_postFields.c_str());
-            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "POST");
-        case HTTPMethod::Put:
-            curl_easy_setopt(m_curlInst, CURLOPT_UPLOAD, 1);
-            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "PUT");
         case HTTPMethod::Delete:
             curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "DELETE");
-        case HTTPMethod::Connect:
-            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "CONNECT");
+            break;
+        case HTTPMethod::Get:
+            curl_easy_setopt(m_curlInst, CURLOPT_HTTPGET, 1L);
+            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "GET");
+            break;
+        case HTTPMethod::Head:
+            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "HEAD");
+            break;
         case HTTPMethod::Options:
             curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "OPTIONS");
-        case HTTPMethod::Trace:
-            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "TRACE");
+            break;
         case HTTPMethod::Patch:
             curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "PATCH");
+            break;
+        case HTTPMethod::Post:
+            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "POST");
+            break;
+        case HTTPMethod::Put:
+            curl_easy_setopt(m_curlInst, CURLOPT_CUSTOMREQUEST, "PUT");
+            break;
+    }
+
+    // Set Headers
+    curl_slist* headerList = nullptr;
+    for (auto& header : m_headers) {
+        std::string headerString = header.first;
+        if (!header.second.empty()) headerString += ": " + header.second;
+
+        if (auto newList = curl_slist_append(headerList, headerString.c_str())) {
+            headerList = newList;
+        }
+
+        curl_easy_setopt(m_curlInst, CURLOPT_HTTPHEADER, headerList);
+        curl_slist_free_all(headerList);
+    }
+
+    // Set URL
+    curl_easy_setopt(m_curlInst, CURLOPT_URL, m_url.c_str());
+
+    // Allow retreival of Certificate Info
+    curl_easy_setopt(m_curlInst, CURLOPT_CERTINFO, 1L);
+
+    // Set Body
+    if (
+        m_method == HTTPMethod::Patch ||
+        m_method == HTTPMethod::Post ||
+        m_method == HTTPMethod::Put
+    ) {
+        curl_easy_setopt(m_curlInst, CURLOPT_POSTFIELDS, m_body.data());
+        curl_easy_setopt(m_curlInst, CURLOPT_POSTFIELDSIZE, m_body.size());
     }
 }
