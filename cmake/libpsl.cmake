@@ -1,4 +1,5 @@
 # Builds libpsl which is especially necessary on Windows since there it is not available via e.g. a package manager.
+include(FetchContent)
 
 include(ExternalProject)
 find_program(MESON_PATH meson)
